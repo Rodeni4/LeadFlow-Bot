@@ -194,6 +194,13 @@ button.switch.error {
   box-shadow: 0 0 0 1px rgba(237, 76, 103, 0.25);
 }
 
+button.switch.disabled,
+button.switch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
 .switchLine {
   display: flex;
   align-items: center;
@@ -221,6 +228,20 @@ button.switch.error {
   max-width: 72px;
   height: 32px;
   padding: 6px 8px;
+}
+
+.ipGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ipValue {
+  font-size: 13px;
+  line-height: 32px;
+  font-variant-numeric: tabular-nums;
+  min-width: 10.5ch;
+  white-space: nowrap;
 }
 
 .gridTwo {
@@ -272,6 +293,11 @@ button.switch.error {
   margin-left: var(--save-btn-margin-left);
   margin-top: var(--save-btn-margin-top);
   align-self: flex-start;
+}
+
+.proxyButtons {
+  display: grid;
+  gap: 10px;
 }
 
 .panelCard table {

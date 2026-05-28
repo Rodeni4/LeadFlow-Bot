@@ -12,6 +12,8 @@ const api = {
   startWebsite: (): Promise<ServiceStatus> => ipcRenderer.invoke("services:start-website"),
   stopWebsite: (): Promise<ServiceStatus> => ipcRenderer.invoke("services:stop-website"),
   getLeads: (): Promise<Lead[]> => ipcRenderer.invoke("leads:get"),
+  getProxyIp: (): Promise<{ ip: string; viaProxy: boolean; error?: string }> =>
+    ipcRenderer.invoke("proxy:get-ip"),
   onLeadsUpdated: (callback: (leads: Lead[]) => void): Unsubscribe => {
     const handler = (_event: unknown, leads: Lead[]) => callback(leads);
     ipcRenderer.on("leads:updated", handler);

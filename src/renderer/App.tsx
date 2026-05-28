@@ -7,7 +7,12 @@ const defaultConfig: AppConfig = {
   googleSheetsId: "",
   googleSheetsRange: "Leads!A:F",
   googleServiceAccountJson: "",
-  port: 3000
+  port: 3000,
+  proxyHost: "",
+  proxyPort: 0,
+  proxyUsername: "",
+  proxyPassword: "",
+  proxyEnabled: false
 };
 
 export function App() {
@@ -17,8 +22,10 @@ export function App() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">("dark");
-  const [activeView, setActiveView] = useState<"recent-leads" | "auth-telegram" | "auth-google">("recent-leads");
+  const [activeView, setActiveView] = useState<"recent-leads" | "auth-telegram" | "auth-google" | "proxy">("recent-leads");
   const [tokenPersisted, setTokenPersisted] = useState(false);
+  const [proxyIp, setProxyIp] = useState("...");
+  const [ipViaProxy, setIpViaProxy] = useState(false);
   const skipAutoSave = useRef(true);
   const configLoaded = useRef(false);
 
@@ -81,6 +88,14 @@ export function App() {
     return () => window.clearTimeout(timer);
   }, [config]);
 
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void refreshProxyIp();
+    }, 30_000);
+    void refreshProxyIp();
+    return () => window.clearInterval(interval);
+  }, [config.proxyHost, config.proxyPort, config.proxyUsername, config.proxyPassword, config.proxyEnabled]);
+
   async function saveConfig(): Promise<void> {
     try {
       setError("");
@@ -99,6 +114,85 @@ export function App() {
       );
     } catch (err) {
       reportError(err, setError);
+    }
+  }
+
+  async function saveProxyConfig(): Promise<void> {
+    try {
+      setError("");
+      setInfo("");
+      const payload: AppConfig = {
+        ...config,
+        port: Number(config.port || 3000),
+        proxyPort: Number(config.proxyPort || 0),
+        proxyEnabled: true
+      };
+      setConfig(payload);
+      await window.leadflowApi.saveConfig(payload);
+      setInfo("Proxy settings saved.");
+      await refreshProxyIp();
+    } catch (err) {
+      reportError(err, setError);
+    }
+  }
+
+  async function clearProxyConfig(): Promise<void> {
+    try {
+      setError("");
+      setInfo("");
+      const payload: AppConfig = {
+        ...config,
+        proxyHost: "",
+        proxyPort: 0,
+        proxyUsername: "",
+        proxyPassword: "",
+        proxyEnabled: false,
+        port: Number(config.port || 3000)
+      };
+      setConfig(payload);
+      await window.leadflowApi.saveConfig(payload);
+      setInfo("Proxy settings cleared.");
+      await refreshProxyIp();
+    } catch (err) {
+      reportError(err, setError);
+    }
+  }
+
+  const hasProxySettings = Boolean(config.proxyHost.trim() && config.proxyPort);
+
+  async function toggleProxy(): Promise<void> {
+    if (!hasProxySettings) {
+      setError("Сначала укажите Host и Port на вкладке Proxy и нажмите Save Proxy.");
+      return;
+    }
+    try {
+      setError("");
+      setInfo("");
+      const payload: AppConfig = {
+        ...config,
+        proxyEnabled: !config.proxyEnabled,
+        port: Number(config.port || 3000)
+      };
+      setConfig(payload);
+      await window.leadflowApi.saveConfig(payload);
+      setInfo(payload.proxyEnabled ? "Прокси включён." : "Прокси выключен.");
+      await refreshProxyIp();
+    } catch (err) {
+      reportError(err, setError);
+    }
+  }
+
+  async function refreshProxyIp(): Promise<void> {
+    try {
+      const result = await window.leadflowApi.getProxyIp();
+      setProxyIp(result.ip);
+      setIpViaProxy(result.viaProxy);
+      if (result.error && activeView === "proxy") {
+        setError(result.error);
+      }
+    } catch {
+      setProxyIp("недоступен");
+      setIpViaProxy(false);
     }
   }
 
@@ -126,6 +220,7 @@ export function App() {
   async function toggleBot(): Promise<void> {
     try {
       setError("");
+      setInfo("");
       if (status.bot !== "running") {
         await ensureConfigSaved();
       }
@@ -133,6 +228,11 @@ export function App() {
         ? await window.leadflowApi.stopBot()
         : await window.leadflowApi.startBot();
       setStatus(next);
+      if (next.bot === "running") {
+        setInfo("Telegram Bot запущен.");
+      } else if (next.bot === "stopped") {
+        setInfo("Telegram Bot остановлен.");
+      }
     } catch (err) {
       reportError(err, setError);
     }
@@ -141,6 +241,7 @@ export function App() {
   async function toggleWebsite(): Promise<void> {
     try {
       setError("");
+      setInfo("");
       if (status.website !== "running") {
         await ensureConfigSaved();
       }
@@ -148,6 +249,11 @@ export function App() {
         ? await window.leadflowApi.stopWebsite()
         : await window.leadflowApi.startWebsite();
       setStatus(next);
+      if (next.website === "running") {
+        setInfo("Сайт запущен.");
+      } else if (next.website === "stopped") {
+        setInfo("Сайт остановлен.");
+      }
     } catch (err) {
       reportError(err, setError);
     }
@@ -177,6 +283,12 @@ export function App() {
             onClick={() => setActiveView("auth-google")}
           >
             Google Sheets ID
+          </button>
+          <button
+            className={`menuItem ${activeView === "proxy" ? "active" : ""}`}
+            onClick={() => setActiveView("proxy")}
+          >
+            Proxy
           </button>
         </nav>
       </aside>
@@ -223,6 +335,30 @@ export function App() {
                   onChange={(event) => setConfig({ ...config, port: Number(event.target.value) })}
                 />
               </div>
+              <div className="controlGroup">
+                <div className="switchLine">
+                  <span className="switchName">Proxy</span>
+                  <button
+                    className={`switch ${config.proxyEnabled ? "on" : ""} ${!hasProxySettings ? "disabled" : ""}`}
+                    onClick={() => void toggleProxy()}
+                    disabled={!hasProxySettings}
+                    aria-label="Toggle proxy"
+                    title={
+                      hasProxySettings
+                        ? config.proxyEnabled
+                          ? "Прокси включён — Telegram и IP через прокси"
+                          : "Прокси выключен — прямое подключение"
+                        : "Сначала сохраните настройки прокси"
+                    }
+                  >
+                    <span className="switchKnob" />
+                  </button>
+                </div>
+              </div>
+              <div className="controlGroup ipGroup" title={ipViaProxy ? "IP через прокси" : "IP без прокси (прямое подключение)"}>
+                <span className="switchName">IP</span>
+                <span className="ipValue">{proxyIp}</span>
+              </div>
             </div>
             <button className="toggleTheme" onClick={() => setTheme(theme === "dark" ? "light" : "dark")}>
               <span className="themeIcon">{theme === "dark" ? "☀" : "☾"}</span>
@@ -244,10 +380,14 @@ export function App() {
                   <span>{info}</span>
                 </div>
               ) : null}
-              {!error && !info && activeView === "auth-google" ? (
+              {!error && !info && (activeView === "auth-google" || activeView === "proxy") ? (
                 <div className="noticeBox info muted">
                   <span className="noticeIcon">i</span>
-                  <span>Google Sheets опционально. Для бота и сайта достаточно токена Telegram.</span>
+                  <span>
+                    {activeView === "auth-google"
+                      ? "Google Sheets опционально. Для бота и сайта достаточно токена Telegram."
+                      : "Заполните прокси и сохраните. IP обновляется каждые 30 секунд."}
+                  </span>
                 </div>
               ) : null}
             </div>
@@ -306,7 +446,7 @@ export function App() {
               </button>
             </div>
           </section>
-        ) : (
+        ) : activeView === "auth-google" ? (
           <section className="card panelCard">
             <h2>Google Sheets</h2>
             <div className="panelFormRow">
@@ -342,6 +482,56 @@ export function App() {
               </button>
             </div>
           </section>
+        ) : (
+          <section className="card panelCard">
+            <h2>Proxy</h2>
+            <div className="panelFormRow">
+              <div className="fields">
+                <label>
+                  Proxy Host
+                  <input
+                    value={config.proxyHost}
+                    onChange={(event) => setConfig({ ...config, proxyHost: event.target.value })}
+                    placeholder="64.7.248.96"
+                  />
+                </label>
+                <label>
+                  Proxy Port
+                  <input
+                    type="number"
+                    value={config.proxyPort || ""}
+                    onChange={(event) => setConfig({ ...config, proxyPort: Number(event.target.value) })}
+                    placeholder="47098"
+                  />
+                </label>
+                <label>
+                  Proxy Username
+                  <input
+                    value={config.proxyUsername}
+                    onChange={(event) => setConfig({ ...config, proxyUsername: event.target.value })}
+                    placeholder="username"
+                  />
+                </label>
+                <label>
+                  Proxy Password
+                  <input
+                    type="password"
+                    value={config.proxyPassword}
+                    onChange={(event) => setConfig({ ...config, proxyPassword: event.target.value })}
+                    placeholder="password"
+                  />
+                </label>
+              </div>
+              <div className="proxyButtons">
+                <button className="primaryButton panelSaveButton" onClick={saveProxyConfig}>
+                  Save Proxy
+                </button>
+                <button className="panelSaveButton" onClick={clearProxyConfig}>
+                  Delete Proxy
+                </button>
+              </div>
+            </div>
+          </section>
         )}
       </section>
     </main>
@@ -354,7 +544,12 @@ function configMatches(a: AppConfig, b: AppConfig): boolean {
     a.googleSheetsId === b.googleSheetsId &&
     a.googleSheetsRange === b.googleSheetsRange &&
     a.googleServiceAccountJson === b.googleServiceAccountJson &&
-    a.port === b.port
+    a.port === b.port &&
+    a.proxyHost === b.proxyHost &&
+    a.proxyPort === b.proxyPort &&
+    a.proxyUsername === b.proxyUsername &&
+    a.proxyPassword === b.proxyPassword &&
+    a.proxyEnabled === b.proxyEnabled
   );
 }
 

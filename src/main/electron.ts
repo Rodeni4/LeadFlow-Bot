@@ -66,9 +66,9 @@ function registerIpc(): void {
     }
     return normalizeConfig(mergeConfigFromEnv({ ...disk, ...memory }) ?? disk);
   });
-  ipcMain.handle("config:set", (_event, config: AppConfig) => {
+  ipcMain.handle("config:set", async (_event, config: AppConfig) => {
     savePersistedConfig(config);
-    getOrchestrator().syncConfig(config);
+    await getOrchestrator().syncConfig(config);
     sendToRenderer("status:updated", getOrchestrator().getStatus());
     return loadPersistedConfig() ?? getOrchestrator().getConfig();
   });
@@ -94,6 +94,18 @@ function registerIpc(): void {
     return getOrchestrator().getStatus();
   });
   ipcMain.handle("leads:get", () => getOrchestrator().getLeads());
+  ipcMain.handle("proxy:get-ip", async () => {
+    try {
+      const config = getOrchestrator().getConfig();
+      const proxy = buildProxyFromConfig(config);
+      const ip = await fetchPublicIp(proxy);
+      return { ip, viaProxy: Boolean(proxy) };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "IP check failed";
+      console.error("[LeadFlow] proxy:get-ip:", message);
+      return { ip: "недоступен", viaProxy: false, error: message };
+    }
+  });
 }
 
 app.whenReady().then(() => {
@@ -129,3 +141,50 @@ app.on("window-all-closed", async () => {
     app.quit();
   }
 });
+
+async function fetchPublicIp(proxy: string | null): Promise<string> {
+  const url = "https://api.ipify.org?format=json";
+  const signal = AbortSignal.timeout(20_000);
+
+  if (!proxy) {
+    const response = await fetch(url, { signal });
+    if (!response.ok) {
+      throw new Error(`Direct IP check failed (${response.status})`);
+    }
+    const data = (await response.json()) as { ip?: string };
+    if (!data.ip) {
+      throw new Error("Direct IP response is empty");
+    }
+    return data.ip;
+  }
+
+  const { ProxyAgent, fetch: undiciFetch } = await import("undici");
+  const agent = new ProxyAgent(proxy);
+  const response = await undiciFetch(url, { dispatcher: agent, signal });
+  if (!response.ok) {
+    throw new Error(`Proxy IP check failed (${response.status})`);
+  }
+  const data = (await response.json()) as { ip?: string };
+  if (!data.ip) {
+    throw new Error("Proxy IP response is empty");
+  }
+  return data.ip;
+}
+
+function buildProxyFromConfig(config: AppConfig | null): string | null {
+  if (!config || !config.proxyEnabled) {
+    return null;
+  }
+  const host = config.proxyHost?.trim();
+  const port = Number(config.proxyPort || 0);
+  if (!host || !port) {
+    return null;
+  }
+
+  const username = config.proxyUsername?.trim();
+  const password = config.proxyPassword?.trim();
+  if (username && password) {
+    return `http://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${host}:${port}`;
+  }
+  return `http://${host}:${port}`;
+}

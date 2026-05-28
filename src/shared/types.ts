@@ -27,4 +27,9 @@ export interface AppConfig {
   googleSheetsRange: string;
   googleServiceAccountJson: string;
   port: number;
+  proxyHost: string;
+  proxyPort: number;
+  proxyUsername: string;
+  proxyPassword: string;
+  proxyEnabled: boolean;
 }

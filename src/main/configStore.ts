@@ -58,7 +58,12 @@ function emptyConfig(): AppConfig {
     googleSheetsId: "",
     googleSheetsRange: "Leads!A:F",
     googleServiceAccountJson: "",
-    port: 3000
+    port: 3000,
+    proxyHost: "",
+    proxyPort: 0,
+    proxyUsername: "",
+    proxyPassword: "",
+    proxyEnabled: false
   };
 }
 
@@ -70,6 +75,13 @@ export function normalizeConfig(config: Partial<AppConfig>): AppConfig {
     googleSheetsId: config.googleSheetsId?.trim() ?? "",
     googleSheetsRange: config.googleSheetsRange?.trim() || "Leads!A:F",
     googleServiceAccountJson: config.googleServiceAccountJson?.trim() ?? "",
-    port: Number(config.port || 3000)
+    port: Number(config.port || 3000),
+    proxyHost: config.proxyHost?.trim() ?? "",
+    proxyPort: Number(config.proxyPort || 0),
+    proxyUsername: config.proxyUsername?.trim() ?? "",
+    proxyPassword: config.proxyPassword?.trim() ?? "",
+    proxyEnabled:
+      config.proxyEnabled ??
+      Boolean(config.proxyHost?.trim() && Number(config.proxyPort || 0))
   };
 }

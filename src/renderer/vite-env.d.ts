@@ -11,6 +11,7 @@ interface LeadflowApi {
   startWebsite: () => Promise<ServiceStatus>;
   stopWebsite: () => Promise<ServiceStatus>;
   getLeads: () => Promise<Lead[]>;
+  getProxyIp: () => Promise<{ ip: string; viaProxy: boolean; error?: string }>;
   onLeadsUpdated: (callback: (leads: Lead[]) => void) => () => void;
   onStatusUpdated: (callback: (status: ServiceStatus) => void) => () => void;
   onBotError: (callback: (message: string) => void) => () => void;

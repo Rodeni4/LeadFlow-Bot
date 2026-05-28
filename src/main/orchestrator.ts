@@ -47,14 +47,28 @@ export class AppOrchestrator {
     this.applyConfig(config);
   }
 
-  /** Saves settings to memory; recreates services only when bot/website are stopped. */
-  syncConfig(config: AppConfig): void {
+  /** Saves settings; recreates bot (and restarts it if it was running). */
+  async syncConfig(config: AppConfig): Promise<void> {
     const normalized = this.normalizeConfig(config);
-    if (this.status.bot === "running" || this.status.website === "running") {
-      this.config = normalized;
-      return;
+    const botWasRunning = this.status.bot === "running";
+
+    this.config = normalized;
+
+    if (botWasRunning) {
+      await this.botService?.stop();
+      this.status.bot = "stopped";
     }
-    this.applyConfig(normalized);
+
+    const sheetsService = createGoogleSheetsService(this.config);
+    this.leadsService = new LeadsService(this.localStore, sheetsService);
+    this.botService = new TelegramBotService(this.config, {
+      onNetworkError: (message) => this.handleBotNetworkError(message)
+    });
+    this.webService = new WebServerService(this.leadsService, this.config);
+
+    if (botWasRunning) {
+      await this.startBot();
+    }
   }
 
   private applyConfig(config: AppConfig): void {
@@ -73,7 +87,12 @@ export class AppOrchestrator {
       googleSheetsId: config.googleSheetsId.trim(),
       googleSheetsRange: config.googleSheetsRange.trim() || "Leads!A:F",
       googleServiceAccountJson: config.googleServiceAccountJson.trim(),
-      port: Number(config.port || 3000)
+      port: Number(config.port || 3000),
+      proxyHost: config.proxyHost.trim(),
+      proxyPort: Number(config.proxyPort || 0),
+      proxyUsername: config.proxyUsername.trim(),
+      proxyPassword: config.proxyPassword.trim(),
+      proxyEnabled: Boolean(config.proxyEnabled)
     };
   }
 

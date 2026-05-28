@@ -27,7 +27,8 @@ export class TelegramBotService {
       throw new Error("TELEGRAM_BOT_TOKEN is required.");
     }
 
-    const proxy = process.env.TELEGRAM_PROXY?.trim() || process.env.HTTPS_PROXY?.trim();
+    const configProxy = buildProxyFromConfig(this.config);
+    const proxy = configProxy || process.env.TELEGRAM_PROXY?.trim() || process.env.HTTPS_PROXY?.trim();
 
     this.bot = new TelegramBot(token, {
       polling: true,
@@ -110,4 +111,23 @@ export class TelegramBotService {
 
 function isNetworkError(message: string): boolean {
   return /ETIMEDOUT|ECONNREFUSED|ENOTFOUND|ECONNRESET|EFATAL|socket hang up/i.test(message);
+}
+
+function buildProxyFromConfig(config: AppConfig): string | null {
+  if (!config.proxyEnabled) {
+    return null;
+  }
+  const host = config.proxyHost?.trim();
+  const port = Number(config.proxyPort || 0);
+  if (!host || !port) {
+    return null;
+  }
+
+  const username = config.proxyUsername?.trim();
+  const password = config.proxyPassword?.trim();
+  if (username && password) {
+    return `http://${encodeURIComponent(username)}:${encodeURIComponent(password)}@${host}:${port}`;
+  }
+
+  return `http://${host}:${port}`;
 }
