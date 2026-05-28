@@ -1,4 +1,4 @@
-import type { AppConfig, ServiceStatus } from "../shared/types";
+import type { AppConfig, ClearLeadsResult, ServiceStatus } from "../shared/types";
 import { createGoogleSheetsService } from "../services/googleSheets";
 import { LeadsService } from "../services/leadsService";
 import { LocalStore } from "../services/localStore";
@@ -22,8 +22,9 @@ export class AppOrchestrator {
     }
   }
 
-  onLeadAdded(listener: () => void): void {
+  onLeadsUpdated(listener: () => void): void {
     this.localStore.on("leadAdded", listener);
+    this.localStore.on("leadsCleared", listener);
   }
 
   setStatusListener(listener: (status: ServiceStatus, botError?: string) => void): void {
@@ -100,6 +101,15 @@ export class AppOrchestrator {
 
   getLeads() {
     return this.localStore.getLeads();
+  }
+
+  async clearLeads(): Promise<ClearLeadsResult> {
+    if (!this.leadsService) {
+      this.localStore.clearLeads();
+      return { leads: [], sheetsCleared: false };
+    }
+    const sheetsCleared = await this.leadsService.clearAll();
+    return { leads: this.localStore.getLeads(), sheetsCleared };
   }
 
   async startBot(): Promise<void> {

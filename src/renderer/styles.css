@@ -295,6 +295,14 @@ button.switch:disabled {
   align-self: flex-start;
 }
 
+.panelSaveHint {
+  flex-shrink: 0;
+  margin-left: var(--save-btn-margin-left);
+  margin-top: 8px;
+  max-width: 220px;
+  line-height: 1.35;
+}
+
 .proxyButtons {
   display: grid;
   gap: 10px;
@@ -302,6 +310,29 @@ button.switch:disabled {
 
 .panelCard table {
   width: 100%;
+}
+
+.leadsTableFooter {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(127, 155, 207, 0.2);
+}
+
+button.clearLeadsButton {
+  border-color: rgba(237, 76, 103, 0.55);
+  color: #ff9ead;
+  background: rgba(237, 76, 103, 0.1);
+}
+
+button.clearLeadsButton:hover:not(:disabled) {
+  background: rgba(237, 76, 103, 0.2);
+}
+
+button.clearLeadsButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .noticeBox {

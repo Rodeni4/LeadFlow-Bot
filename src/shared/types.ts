@@ -7,6 +7,8 @@ export interface Lead {
   phone: string;
   message: string;
   createdAt: string;
+  /** @username or id:123 — only for telegram leads */
+  telegram?: string;
 }
 
 export interface CreateLeadInput {
@@ -14,6 +16,12 @@ export interface CreateLeadInput {
   name: string;
   phone: string;
   message: string;
+  telegram?: string;
+}
+
+export interface ClearLeadsResult {
+  leads: Lead[];
+  sheetsCleared: boolean;
 }
 
 export interface ServiceStatus {

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { AppConfig, Lead, ServiceStatus } from "../shared/types";
+import type { AppConfig, ClearLeadsResult, Lead, ServiceStatus } from "../shared/types";
 
 type Unsubscribe = () => void;
 
@@ -12,8 +12,15 @@ const api = {
   startWebsite: (): Promise<ServiceStatus> => ipcRenderer.invoke("services:start-website"),
   stopWebsite: (): Promise<ServiceStatus> => ipcRenderer.invoke("services:stop-website"),
   getLeads: (): Promise<Lead[]> => ipcRenderer.invoke("leads:get"),
+  clearLeads: (): Promise<ClearLeadsResult> => ipcRenderer.invoke("leads:clear"),
   getProxyIp: (): Promise<{ ip: string; viaProxy: boolean; error?: string }> =>
     ipcRenderer.invoke("proxy:get-ip"),
+  testGoogleSheets: (
+    config: AppConfig
+  ): Promise<
+    | { ok: true; title: string; clientEmail: string }
+    | { ok: false; error: string; clientEmail?: string }
+  > => ipcRenderer.invoke("google:test-sheets", config),
   onLeadsUpdated: (callback: (leads: Lead[]) => void): Unsubscribe => {
     const handler = (_event: unknown, leads: Lead[]) => callback(leads);
     ipcRenderer.on("leads:updated", handler);

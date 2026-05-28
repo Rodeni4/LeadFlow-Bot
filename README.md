@@ -1,53 +1,93 @@
 # LeadFlow Bot
 
-Electron desktop app that controls:
-- Telegram bot lead intake,
-- local website lead intake (`http://localhost:3000`),
-- Google Sheets persistence,
-- lead list view inside Electron.
+Desktop app (Electron) for collecting leads from **Telegram** and a **local website**, storing them locally and syncing to **Google Sheets**.
 
 ## Features
-- Start/stop Telegram bot from desktop UI.
-- Start/stop website from desktop UI.
-- Receive leads from Telegram and web form.
-- Save each lead to Google Sheets.
-- View recent leads in Electron app.
+
+- **Telegram bot** — step-by-step lead form (`/start`, `/help`, `/cancel`)
+- **Local website** — form at `http://localhost:3000` + `POST /api/leads`
+- **Google Sheets** — append each lead; connection test on save
+- **Proxy** — HTTP proxy for Telegram API + public IP check in the top bar
+- **Recent leads** — table in the app; clear local list and Google Sheet data (headers stay)
+- **Persistence** — token, proxy, and Google settings saved to disk between restarts
 
 ## Tech stack
+
 - Electron + TypeScript
-- React + Vite (renderer UI)
-- Express (local website/API)
+- React + Vite (UI)
+- Express (local web server)
 - node-telegram-bot-api
 - Google Sheets API (`googleapis`)
 
-## Setup
+## Quick start
+
 1. Install dependencies:
-   - `npm install`
-2. Create `.env` from `.env.example` and fill values.
-3. Share your Google Sheet with service account email as Editor.
+   ```bash
+   npm install
+   ```
+2. Copy `.env.example` to `.env` and fill in values (optional — settings can be saved in the UI).
+3. Run in development:
+   ```bash
+   npm run dev
+   ```
+   Electron restarts automatically when the main process is rebuilt (`nodemon`).
 
-## Run
-- Development mode:
-  - `npm run dev`
-- Production build:
-  - `npm run build`
-- Run built app:
-  - `npm run start`
+4. In the app:
+   - **Authorization Telegram** — paste bot token → Save
+   - **Google Sheets ID** — spreadsheet ID, range, Service Account JSON → Save (table is verified before save)
+   - **Proxy** (optional) — host, port, credentials → Save; toggle in the top bar
+   - Turn on **Start Bot** / **Start Website**
 
-## Google Sheets columns
-Default range: `Leads!A:F`
-1. Lead ID
-2. Source (`telegram` or `website`)
-3. Name
-4. Phone
-5. Message
-6. Created At (ISO timestamp)
+## Google Sheets setup
 
-## Telegram flow
-- `/start` - starts lead form flow.
-- `/help` - show commands.
-- `/cancel` - cancel current flow.
+1. Create a spreadsheet with sheet **Leads** and headers in row 1:
+
+   | Date | Source | Full Name | Phone | Email | Telegram |
+   |------|--------|-----------|-------|-------|----------|
+
+2. Google Cloud → Service Account → download JSON key.
+3. Share the spreadsheet with `client_email` from JSON as **Editor**.
+4. In the app, enter Spreadsheet ID, range `Leads!A:F`, and paste the JSON.
+
+### Column mapping
+
+| Column | Content |
+|--------|---------|
+| **Date** | `DD.MM.YYYY HH:mm` (text, local time) |
+| **Source** | `telegram` or `website` |
+| **Full Name** | Name from the form |
+| **Phone** | Phone number |
+| **Email** | Comment / message |
+| **Telegram** | `@username` or `id:123` for Telegram; empty for website |
+
+## Telegram commands
+
+- `/start` — start lead form (name → phone → comment)
+- `/cancel` — cancel current form
+- `/help` — show commands
+
+## Build & run
+
+```bash
+npm run build   # compile main + renderer
+npm run start   # run production build
+```
+
+## Environment variables
+
+See `.env.example`. All settings can also be configured in the UI and are stored in:
+
+- Windows: `%APPDATA%\leadflow-bot\`
+- macOS: `~/Library/Application Support/leadflow-bot/`
+- Linux: `~/.config/leadflow-bot/`
 
 ## Notes
-- If `GOOGLE_SERVICE_ACCOUNT_JSON` is invalid, app will fail at startup.
-- Website can also accept POST JSON on `/api/leads`.
+
+- Google Sheets is **optional** — bot and website work with Telegram token only.
+- If Telegram API is blocked, enable **Proxy** in the app or set `TELEGRAM_PROXY` in `.env`.
+- **Clear table** removes data rows from the app and Google Sheet (row 1 headers are kept).
+- Screenshots are not required for setup; add them to `docs/` later if you want a visual GitHub README.
+
+## License
+
+MIT

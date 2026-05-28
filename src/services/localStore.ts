@@ -30,6 +30,12 @@ export class LocalStore extends EventEmitter {
     return [...this.leads];
   }
 
+  clearLeads(): void {
+    this.leads = [];
+    this.persist();
+    this.emit("leadsCleared");
+  }
+
   private loadFromDisk(): Lead[] {
     if (!this.persistenceFile) {
       return [];
@@ -76,6 +82,7 @@ function isLead(value: unknown): value is Lead {
     typeof lead.name === "string" &&
     typeof lead.phone === "string" &&
     typeof lead.message === "string" &&
-    typeof lead.createdAt === "string"
+    typeof lead.createdAt === "string" &&
+    (lead.telegram === undefined || typeof lead.telegram === "string")
   );
 }

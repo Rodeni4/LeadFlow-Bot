@@ -24,6 +24,7 @@ export function App() {
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [activeView, setActiveView] = useState<"recent-leads" | "auth-telegram" | "auth-google" | "proxy">("recent-leads");
   const [tokenPersisted, setTokenPersisted] = useState(false);
+  const [sheetsPersisted, setSheetsPersisted] = useState(false);
   const [proxyIp, setProxyIp] = useState("...");
   const [ipViaProxy, setIpViaProxy] = useState(false);
   const skipAutoSave = useRef(true);
@@ -42,6 +43,9 @@ export function App() {
         if (saved) {
           setConfig(saved);
           setTokenPersisted(Boolean(saved.telegramBotToken.trim()));
+          setSheetsPersisted(
+            Boolean(saved.googleSheetsId.trim() && saved.googleServiceAccountJson.trim())
+          );
           setInfo("Настройки загружены.");
         }
         configLoaded.current = true;
@@ -111,6 +115,43 @@ export function App() {
         hasSheets
           ? "Настройки сохранены."
           : "Токен Telegram сохранён. Google Sheets можно добавить позже."
+      );
+    } catch (err) {
+      reportError(err, setError);
+    }
+  }
+
+  async function saveGoogleSheetsConfig(): Promise<void> {
+    try {
+      setError("");
+      setInfo("");
+      if (!config.telegramBotToken.trim()) {
+        setError("Сначала сохраните Telegram Bot Token.");
+        return;
+      }
+
+      const payload: AppConfig = {
+        ...config,
+        port: Number(config.port || 3000),
+        googleSheetsRange: config.googleSheetsRange.trim() || "Leads!A:F"
+      };
+
+      if (!payload.googleSheetsId.trim() || !payload.googleServiceAccountJson.trim()) {
+        setError("Укажите Google Sheets ID и Service Account JSON.");
+        return;
+      }
+
+      const test = await window.leadflowApi.testGoogleSheets(payload);
+      if (!test.ok) {
+        setError(test.error);
+        return;
+      }
+
+      setConfig(payload);
+      await window.leadflowApi.saveConfig(payload);
+      setSheetsPersisted(true);
+      setInfo(
+        `Google Sheets подключён: «${test.title}». Новые лиды попадут в диапазон ${payload.googleSheetsRange}.`
       );
     } catch (err) {
       reportError(err, setError);
@@ -196,6 +237,32 @@ export function App() {
     }
   }
 
+  async function clearLeadsTable(): Promise<void> {
+    if (leads.length === 0) {
+      return;
+    }
+    const hasSheets = Boolean(config.googleSheetsId.trim() && config.googleServiceAccountJson.trim());
+    const confirmText = hasSheets
+      ? "Очистить заявки в приложении и в Google Sheets? Строка заголовков в таблице сохранится."
+      : "Очистить список заявок в приложении?";
+    if (!window.confirm(confirmText)) {
+      return;
+    }
+    try {
+      setError("");
+      setInfo("");
+      const result = await window.leadflowApi.clearLeads();
+      setLeads(result.leads);
+      setInfo(
+        result.sheetsCleared
+          ? "Список заявок и Google Sheets очищены."
+          : "Список заявок очищен."
+      );
+    } catch (err) {
+      reportError(err, setError);
+    }
+  }
+
   async function ensureConfigSaved(): Promise<void> {
     const payload: AppConfig = {
       ...config,
@@ -260,6 +327,15 @@ export function App() {
   }
 
   const websiteUrl = useMemo(() => `http://localhost:${config.port || 3000}`, [config.port]);
+
+  const serviceAccountEmail = useMemo(() => {
+    try {
+      const parsed = JSON.parse(config.googleServiceAccountJson.trim()) as { client_email?: string };
+      return parsed.client_email?.trim() ?? "";
+    } catch {
+      return "";
+    }
+  }, [config.googleServiceAccountJson]);
 
   return (
     <main className={`appShell ${theme}`}>
@@ -385,7 +461,7 @@ export function App() {
                   <span className="noticeIcon">i</span>
                   <span>
                     {activeView === "auth-google"
-                      ? "Google Sheets опционально. Для бота и сайта достаточно токена Telegram."
+                      ? "Дайте таблице доступ для email Service Account (Редактор), затем Save Authorization."
                       : "Заполните прокси и сохраните. IP обновляется каждые 30 секунд."}
                   </span>
                 </div>
@@ -403,8 +479,9 @@ export function App() {
                   <th>Source</th>
                   <th>Name</th>
                   <th>Phone</th>
-                  <th>Message</th>
-                  <th>Created</th>
+                  <th>Comment</th>
+                  <th>Telegram</th>
+                  <th>Date</th>
                 </tr>
               </thead>
               <tbody>
@@ -414,11 +491,22 @@ export function App() {
                     <td>{lead.name}</td>
                     <td>{lead.phone}</td>
                     <td>{lead.message}</td>
-                    <td>{new Date(lead.createdAt).toLocaleString()}</td>
+                    <td>{lead.source === "telegram" ? lead.telegram || "—" : ""}</td>
+                    <td>{new Date(lead.createdAt).toLocaleString("ru-RU")}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+            <div className="leadsTableFooter">
+              <button
+                type="button"
+                className="clearLeadsButton"
+                onClick={() => void clearLeadsTable()}
+                disabled={leads.length === 0}
+              >
+                Очистить таблицу
+              </button>
+            </div>
           </section>
         ) : activeView === "auth-telegram" ? (
           <section className="card panelCard">
@@ -455,7 +543,10 @@ export function App() {
                   Google Sheets ID
                   <input
                     value={config.googleSheetsId}
-                    onChange={(event) => setConfig({ ...config, googleSheetsId: event.target.value })}
+                    onChange={(event) => {
+                      setSheetsPersisted(false);
+                      setConfig({ ...config, googleSheetsId: event.target.value });
+                    }}
                     placeholder="Spreadsheet ID"
                   />
                 </label>
@@ -471,15 +562,26 @@ export function App() {
                   Google Service Account JSON
                   <textarea
                     value={config.googleServiceAccountJson}
-                    onChange={(event) => setConfig({ ...config, googleServiceAccountJson: event.target.value })}
+                    onChange={(event) => {
+                      setSheetsPersisted(false);
+                      setConfig({ ...config, googleServiceAccountJson: event.target.value });
+                    }}
                     placeholder='{"type":"service_account",...}'
                     rows={9}
                   />
+                  {serviceAccountEmail ? (
+                    <span className="fieldHint">
+                      Доступ к таблице для: {serviceAccountEmail}
+                    </span>
+                  ) : null}
                 </label>
               </div>
-              <button className="primaryButton panelSaveButton" onClick={saveConfig}>
+              <button className="primaryButton panelSaveButton" onClick={saveGoogleSheetsConfig}>
                 Save Authorization
               </button>
+              {sheetsPersisted ? (
+                <span className="fieldHint panelSaveHint">Google Sheets сохранён и проверен.</span>
+              ) : null}
             </div>
           </section>
         ) : (

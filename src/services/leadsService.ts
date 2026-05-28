@@ -24,17 +24,33 @@ export class LeadsService {
       name,
       phone,
       message,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      ...(input.telegram?.trim() ? { telegram: input.telegram.trim() } : {})
     };
 
     this.localStore.addLead(lead);
     if (this.sheetsService) {
-      await this.sheetsService.appendLead(lead);
+      try {
+        await this.sheetsService.appendLead(lead);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error("[LeadsService] Google Sheets append failed:", message);
+      }
     }
     return lead;
   }
 
   getRecentLeads(): Lead[] {
     return this.localStore.getLeads();
+  }
+
+  async clearAll(): Promise<boolean> {
+    let sheetsCleared = false;
+    if (this.sheetsService) {
+      await this.sheetsService.clearLeadRows();
+      sheetsCleared = true;
+    }
+    this.localStore.clearLeads();
+    return sheetsCleared;
   }
 }

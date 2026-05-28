@@ -12,6 +12,7 @@ interface ChatSession {
   step: LeadStep;
   name?: string;
   phone?: string;
+  telegramUser?: string;
 }
 
 export interface TelegramBotHooks {
@@ -86,7 +87,7 @@ export class TelegramBotService {
     });
 
     this.bot.onText(START_COMMAND, (msg) => {
-      void this.beginLeadFlow(msg.chat.id).catch((err) => this.logHandlerError(err));
+      void this.beginLeadFlow(msg).catch((err) => this.logHandlerError(err));
     });
 
     this.bot.onText(HELP_COMMAND, (msg) => {
@@ -102,12 +103,16 @@ export class TelegramBotService {
       if (!text || text.startsWith("/")) {
         return;
       }
-      void this.handleLeadStep(msg.chat.id, text).catch((err) => this.logHandlerError(err));
+      void this.handleLeadStep(msg).catch((err) => this.logHandlerError(err));
     });
   }
 
-  private async beginLeadFlow(chatId: number): Promise<void> {
-    this.sessions.set(chatId, { step: "name" });
+  private async beginLeadFlow(msg: TelegramBot.Message): Promise<void> {
+    const chatId = msg.chat.id;
+    this.sessions.set(chatId, {
+      step: "name",
+      telegramUser: formatTelegramUser(msg.from, chatId)
+    });
     await this.reply(
       chatId,
       "Здравствуйте! Оставьте заявку — ответьте на несколько вопросов.\n\nКак вас зовут?"
@@ -119,11 +124,17 @@ export class TelegramBotService {
     await this.reply(chatId, "Заявка отменена. Чтобы начать снова, отправьте /start");
   }
 
-  private async handleLeadStep(chatId: number, text: string): Promise<void> {
+  private async handleLeadStep(msg: TelegramBot.Message): Promise<void> {
+    const chatId = msg.chat.id;
+    const text = msg.text?.trim() ?? "";
     const session = this.sessions.get(chatId);
     if (!session || session.step === "idle") {
       await this.reply(chatId, "Чтобы оставить заявку, отправьте /start\nСправка: /help");
       return;
+    }
+
+    if (msg.from) {
+      session.telegramUser = formatTelegramUser(msg.from, chatId);
     }
 
     if (session.step === "name") {
@@ -161,7 +172,8 @@ export class TelegramBotService {
           source: "telegram",
           name,
           phone,
-          message
+          message,
+          telegram: session.telegramUser
         });
         this.sessions.delete(chatId);
         await this.reply(
@@ -205,6 +217,20 @@ function helpText(): string {
     "/cancel — отменить текущую заявку",
     "/help — эта справка"
   ].join("\n");
+}
+
+function formatTelegramUser(from: TelegramBot.User | undefined, chatId: number): string {
+  if (!from) {
+    return `id:${chatId}`;
+  }
+  if (from.username) {
+    return `@${from.username}`;
+  }
+  const fullName = [from.first_name, from.last_name].filter(Boolean).join(" ").trim();
+  if (fullName) {
+    return `${fullName} (id:${from.id})`;
+  }
+  return `id:${from.id}`;
 }
 
 function isValidPhone(text: string): boolean {

@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import type { AppConfig } from "../shared/types";
 import { loadPersistedConfig, mergeConfigFromEnv, normalizeConfig, savePersistedConfig } from "./configStore";
 import { AppOrchestrator } from "./orchestrator";
+import { testGoogleSheetsConnection } from "../services/googleSheets";
 
 dotenv.config();
 
@@ -94,6 +95,14 @@ function registerIpc(): void {
     return getOrchestrator().getStatus();
   });
   ipcMain.handle("leads:get", () => getOrchestrator().getLeads());
+  ipcMain.handle("leads:clear", async () => {
+    const result = await getOrchestrator().clearLeads();
+    sendToRenderer("leads:updated", result.leads);
+    return result;
+  });
+  ipcMain.handle("google:test-sheets", async (_event, config: AppConfig) => {
+    return testGoogleSheetsConnection(normalizeConfig(config));
+  });
   ipcMain.handle("proxy:get-ip", async () => {
     try {
       const config = getOrchestrator().getConfig();
@@ -115,6 +124,7 @@ app.whenReady().then(() => {
   if (initialConfig) {
     console.log("[LeadFlow] config loaded from disk or .env");
   }
+  console.log("[LeadFlow] Sheets columns: Date | Source | Full Name | Phone | Email | Telegram");
 
   registerIpc();
   orchestrator.setStatusListener((status, botError) => {
@@ -123,7 +133,7 @@ app.whenReady().then(() => {
       sendToRenderer("bot:error", botError);
     }
   });
-  orchestrator.onLeadAdded(() => {
+  orchestrator.onLeadsUpdated(() => {
     sendToRenderer("leads:updated", getOrchestrator().getLeads());
   });
   createWindow();

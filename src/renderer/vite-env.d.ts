@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 
-import type { AppConfig, Lead, ServiceStatus } from "../shared/types";
+import type { AppConfig, ClearLeadsResult, Lead, ServiceStatus } from "../shared/types";
 
 interface LeadflowApi {
   getConfig: () => Promise<AppConfig | null>;
@@ -11,7 +11,14 @@ interface LeadflowApi {
   startWebsite: () => Promise<ServiceStatus>;
   stopWebsite: () => Promise<ServiceStatus>;
   getLeads: () => Promise<Lead[]>;
+  clearLeads: () => Promise<ClearLeadsResult>;
   getProxyIp: () => Promise<{ ip: string; viaProxy: boolean; error?: string }>;
+  testGoogleSheets: (
+    config: AppConfig
+  ) => Promise<
+    | { ok: true; title: string; clientEmail: string }
+    | { ok: false; error: string; clientEmail?: string }
+  >;
   onLeadsUpdated: (callback: (leads: Lead[]) => void) => () => void;
   onStatusUpdated: (callback: (status: ServiceStatus) => void) => () => void;
   onBotError: (callback: (message: string) => void) => () => void;
