@@ -59,12 +59,7 @@ export class AppOrchestrator {
       this.status.bot = "stopped";
     }
 
-    const sheetsService = createGoogleSheetsService(this.config);
-    this.leadsService = new LeadsService(this.localStore, sheetsService);
-    this.botService = new TelegramBotService(this.config, {
-      onNetworkError: (message) => this.handleBotNetworkError(message)
-    });
-    this.webService = new WebServerService(this.leadsService, this.config);
+    this.recreateServices();
 
     if (botWasRunning) {
       await this.startBot();
@@ -73,9 +68,16 @@ export class AppOrchestrator {
 
   private applyConfig(config: AppConfig): void {
     this.config = this.normalizeConfig(config);
+    this.recreateServices();
+  }
+
+  private recreateServices(): void {
+    if (!this.config) {
+      return;
+    }
     const sheetsService = createGoogleSheetsService(this.config);
     this.leadsService = new LeadsService(this.localStore, sheetsService);
-    this.botService = new TelegramBotService(this.config, {
+    this.botService = new TelegramBotService(this.config, this.leadsService, {
       onNetworkError: (message) => this.handleBotNetworkError(message)
     });
     this.webService = new WebServerService(this.leadsService, this.config);
