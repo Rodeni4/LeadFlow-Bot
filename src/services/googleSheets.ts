@@ -3,6 +3,15 @@ import type { AppConfig, Lead } from "../shared/types";
 
 const DEFAULT_RANGE = "Leads!A:F";
 
+export function createGoogleSheetsService(config: AppConfig): GoogleSheetsService | null {
+  const spreadsheetId = config.googleSheetsId.trim();
+  const credentialsRaw = config.googleServiceAccountJson.trim();
+  if (!spreadsheetId || !credentialsRaw) {
+    return null;
+  }
+  return new GoogleSheetsService(config);
+}
+
 export class GoogleSheetsService {
   private readonly spreadsheetId: string;
   private readonly range: string;
@@ -12,15 +21,7 @@ export class GoogleSheetsService {
     this.spreadsheetId = config.googleSheetsId.trim();
     this.range = config.googleSheetsRange.trim() || DEFAULT_RANGE;
 
-    if (!this.spreadsheetId) {
-      throw new Error("GOOGLE_SHEETS_ID is required.");
-    }
-
     const credentialsRaw = config.googleServiceAccountJson.trim();
-    if (!credentialsRaw) {
-      throw new Error("GOOGLE_SERVICE_ACCOUNT_JSON is required.");
-    }
-
     const credentials = JSON.parse(credentialsRaw);
     this.authClient = new google.auth.GoogleAuth({
       credentials,

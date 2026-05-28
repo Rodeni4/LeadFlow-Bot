@@ -1,108 +1,113 @@
 import TelegramBot from "node-telegram-bot-api";
 import type { AppConfig } from "../shared/types";
-import type { LeadsService } from "./leadsService";
 
-type Step = "name" | "phone" | "message";
+const START_COMMAND = /^\/start(?:@\w+)?(?:\s+.*)?$/i;
 
-interface Session {
-  step: Step;
-  draft: {
-    name?: string;
-    phone?: string;
-    message?: string;
-  };
+export interface TelegramBotHooks {
+  onNetworkError?: (message: string) => void;
 }
 
 export class TelegramBotService {
   private bot: TelegramBot | null = null;
-  private readonly sessions = new Map<number, Session>();
+  private networkErrorHandled = false;
 
   constructor(
-    private readonly leadsService: LeadsService,
-    private readonly config: AppConfig
+    private readonly config: AppConfig,
+    private readonly hooks: TelegramBotHooks = {}
   ) {}
 
-  start(): void {
+  async start(): Promise<void> {
     if (this.bot) {
       return;
     }
 
+    this.networkErrorHandled = false;
     const token = this.config.telegramBotToken.trim();
     if (!token) {
       throw new Error("TELEGRAM_BOT_TOKEN is required.");
     }
 
-    this.bot = new TelegramBot(token, { polling: true });
-    this.bot.onText(/^\/start$/, (msg) => this.handleStart(msg.chat.id));
-    this.bot.onText(/^\/help$/, (msg) => this.sendHelp(msg.chat.id));
-    this.bot.onText(/^\/cancel$/, (msg) => this.handleCancel(msg.chat.id));
-    this.bot.on("message", (msg) => this.handleMessage(msg.chat.id, msg.text ?? ""));
+    const proxy = process.env.TELEGRAM_PROXY?.trim() || process.env.HTTPS_PROXY?.trim();
+
+    this.bot = new TelegramBot(token, {
+      polling: true,
+      ...(proxy ? { request: { proxy } as NonNullable<TelegramBot.ConstructorOptions["request"]> } : {})
+    });
+    this.registerHandlers();
+
+    void this.bot
+      .getMe()
+      .then((me) => console.log(`[TelegramBot] echo mode, connected as @${me.username ?? me.id}`))
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.warn("[TelegramBot] Telegram API unreachable:", message);
+      });
   }
 
   async stop(): Promise<void> {
     if (!this.bot) {
       return;
     }
-    await this.bot.stopPolling();
-    this.bot = null;
-    this.sessions.clear();
-  }
-
-  private async handleStart(chatId: number): Promise<void> {
-    this.sessions.set(chatId, { step: "name", draft: {} });
-    await this.bot?.sendMessage(chatId, "Привет! Отправьте ваше имя.");
-  }
-
-  private async sendHelp(chatId: number): Promise<void> {
-    await this.bot?.sendMessage(
-      chatId,
-      "Команды:\n/start - начать заявку\n/cancel - отменить текущую заявку"
-    );
-  }
-
-  private async handleCancel(chatId: number): Promise<void> {
-    this.sessions.delete(chatId);
-    await this.bot?.sendMessage(chatId, "Заявка отменена.");
-  }
-
-  private async handleMessage(chatId: number, text: string): Promise<void> {
-    if (!this.bot || text.startsWith("/")) {
-      return;
-    }
-
-    const session = this.sessions.get(chatId);
-    if (!session) {
-      return;
-    }
-
-    if (session.step === "name") {
-      session.draft.name = text;
-      session.step = "phone";
-      await this.bot.sendMessage(chatId, "Укажите телефон.");
-      return;
-    }
-
-    if (session.step === "phone") {
-      session.draft.phone = text;
-      session.step = "message";
-      await this.bot.sendMessage(chatId, "Добавьте комментарий к заявке.");
-      return;
-    }
-
-    session.draft.message = text;
     try {
-      await this.leadsService.createLead({
-        source: "telegram",
-        name: session.draft.name ?? "",
-        phone: session.draft.phone ?? "",
-        message: session.draft.message ?? ""
-      });
-      await this.bot.sendMessage(chatId, "Спасибо! Заявка сохранена.");
+      await this.bot.stopPolling();
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Unknown error";
-      await this.bot.sendMessage(chatId, `Ошибка: ${message}`);
+      console.warn("[TelegramBot] stopPolling:", error);
     } finally {
-      this.sessions.delete(chatId);
+      this.bot = null;
     }
   }
+
+  private registerHandlers(): void {
+    if (!this.bot) {
+      return;
+    }
+
+    this.bot.on("polling_error", (error) => {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[TelegramBot] polling_error:", message);
+      if (isNetworkError(message)) {
+        this.reportNetworkError(message);
+      }
+    });
+
+    this.bot.onText(START_COMMAND, (msg) => {
+      void this.reply(
+        msg.chat.id,
+        "Echo-режим.\n\nОтправьте любой текст — бот повторит его.\nПозже подключим приём заявок."
+      ).catch((err) => this.logHandlerError(err));
+    });
+
+    this.bot.on("message", (msg) => {
+      const text = msg.text?.trim();
+      if (!text || text.startsWith("/")) {
+        return;
+      }
+      void this.reply(msg.chat.id, `Echo: ${text}`).catch((err) => this.logHandlerError(err));
+    });
+  }
+
+  private reportNetworkError(rawMessage: string): void {
+    if (this.networkErrorHandled) {
+      return;
+    }
+    this.networkErrorHandled = true;
+
+    const hint = "Нет доступа к Telegram API. Проверьте интернет или VPN на компьютере.";
+    const message = isNetworkError(rawMessage) ? hint : rawMessage;
+
+    this.hooks.onNetworkError?.(message);
+    void this.stop();
+  }
+
+  private async reply(chatId: number, text: string): Promise<void> {
+    await this.bot?.sendMessage(chatId, text);
+  }
+
+  private logHandlerError(error: unknown): void {
+    console.error("[TelegramBot] handler error:", error);
+  }
+}
+
+function isNetworkError(message: string): boolean {
+  return /ETIMEDOUT|ECONNREFUSED|ENOTFOUND|ECONNRESET|EFATAL|socket hang up/i.test(message);
 }

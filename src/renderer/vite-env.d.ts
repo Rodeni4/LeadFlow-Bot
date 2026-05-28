@@ -13,6 +13,7 @@ interface LeadflowApi {
   getLeads: () => Promise<Lead[]>;
   onLeadsUpdated: (callback: (leads: Lead[]) => void) => () => void;
   onStatusUpdated: (callback: (status: ServiceStatus) => void) => () => void;
+  onBotError: (callback: (message: string) => void) => () => void;
 }
 
 declare global {

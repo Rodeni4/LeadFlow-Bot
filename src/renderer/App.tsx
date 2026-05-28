@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppConfig, Lead, ServiceStatus } from "../shared/types";
 
 const defaultStatus: ServiceStatus = { bot: "stopped", website: "stopped" };
@@ -18,24 +18,68 @@ export function App() {
   const [info, setInfo] = useState("");
   const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [activeView, setActiveView] = useState<"recent-leads" | "auth-telegram" | "auth-google">("recent-leads");
+  const [tokenPersisted, setTokenPersisted] = useState(false);
+  const skipAutoSave = useRef(true);
+  const configLoaded = useRef(false);
 
   useEffect(() => {
-    window.leadflowApi.getConfig().then((saved) => {
-      if (saved) {
-        setConfig(saved);
-        setInfo("Config loaded.");
-      }
-    }).catch((err) => reportError(err, setError));
-    window.leadflowApi.getStatus().then(setStatus).catch((err) => reportError(err, setError));
-    window.leadflowApi.getLeads().then(setLeads).catch((err) => reportError(err, setError));
+    const api = window.leadflowApi;
+    if (!api) {
+      setError("Запустите приложение через npm run dev (окно Electron, не браузер).");
+      return;
+    }
 
-    const unsubLeads = window.leadflowApi.onLeadsUpdated(setLeads);
-    const unsubStatus = window.leadflowApi.onStatusUpdated(setStatus);
+    api
+      .getConfig()
+      .then((saved) => {
+        if (saved) {
+          setConfig(saved);
+          setTokenPersisted(Boolean(saved.telegramBotToken.trim()));
+          setInfo("Настройки загружены.");
+        }
+        configLoaded.current = true;
+        skipAutoSave.current = false;
+      })
+      .catch((err) => reportError(err, setError));
+
+    api.getStatus().then(setStatus).catch((err) => reportError(err, setError));
+    api.getLeads().then(setLeads).catch((err) => reportError(err, setError));
+
+    const unsubLeads = api.onLeadsUpdated(setLeads);
+    const unsubStatus = api.onStatusUpdated(setStatus);
+    const unsubBotError = api.onBotError((message) => {
+      setError(message);
+      setInfo("");
+    });
     return () => {
       unsubLeads();
       unsubStatus();
+      unsubBotError();
     };
   }, []);
+
+  useEffect(() => {
+    if (skipAutoSave.current || !configLoaded.current) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      const payload: AppConfig = {
+        ...config,
+        port: Number(config.port || 3000)
+      };
+      if (!payload.telegramBotToken.trim()) {
+        return;
+      }
+
+      void window.leadflowApi
+        ?.saveConfig(payload)
+        .then(() => setTokenPersisted(true))
+        .catch((err) => reportError(err, setError));
+    }, 600);
+
+    return () => window.clearTimeout(timer);
+  }, [config]);
 
   async function saveConfig(): Promise<void> {
     try {
@@ -46,15 +90,45 @@ export function App() {
         port: Number(config.port || 3000)
       };
       await window.leadflowApi.saveConfig(payload);
-      setInfo("Authorization settings saved.");
+      setTokenPersisted(Boolean(payload.telegramBotToken.trim()));
+      const hasSheets = Boolean(payload.googleSheetsId.trim() && payload.googleServiceAccountJson.trim());
+      setInfo(
+        hasSheets
+          ? "Настройки сохранены."
+          : "Токен Telegram сохранён. Google Sheets можно добавить позже."
+      );
     } catch (err) {
       reportError(err, setError);
     }
   }
 
+  async function ensureConfigSaved(): Promise<void> {
+    const payload: AppConfig = {
+      ...config,
+      port: Number(config.port || 3000)
+    };
+    if (!payload.telegramBotToken.trim()) {
+      throw new Error("Введите Telegram Bot Token и нажмите Save Authorization.");
+    }
+
+    const saved = await window.leadflowApi.getConfig();
+    if (saved && configMatches(saved, payload)) {
+      return;
+    }
+
+    if (status.bot === "running" || status.website === "running") {
+      throw new Error("Выключите бота и сайт перед сменой настроек.");
+    }
+
+    await window.leadflowApi.saveConfig(payload);
+  }
+
   async function toggleBot(): Promise<void> {
     try {
       setError("");
+      if (status.bot !== "running") {
+        await ensureConfigSaved();
+      }
       const next = status.bot === "running"
         ? await window.leadflowApi.stopBot()
         : await window.leadflowApi.startBot();
@@ -67,6 +141,9 @@ export function App() {
   async function toggleWebsite(): Promise<void> {
     try {
       setError("");
+      if (status.website !== "running") {
+        await ensureConfigSaved();
+      }
       const next = status.website === "running"
         ? await window.leadflowApi.stopWebsite()
         : await window.leadflowApi.startWebsite();
@@ -76,7 +153,7 @@ export function App() {
     }
   }
 
-  const websiteUrl = useMemo(() => "http://localhost:3000", []);
+  const websiteUrl = useMemo(() => `http://localhost:${config.port || 3000}`, [config.port]);
 
   return (
     <main className={`appShell ${theme}`}>
@@ -112,7 +189,7 @@ export function App() {
                 <div className="switchLine">
                   <span className="switchName">Start Bot</span>
                   <button
-                    className={`switch ${status.bot === "running" ? "on" : ""}`}
+                    className={`switch ${status.bot === "running" ? "on" : ""} ${status.bot === "error" ? "error" : ""}`}
                     onClick={toggleBot}
                     aria-label="Toggle bot"
                   >
@@ -170,7 +247,7 @@ export function App() {
               {!error && !info && activeView === "auth-google" ? (
                 <div className="noticeBox info muted">
                   <span className="noticeIcon">i</span>
-                  <span>Fill in Google Sheets settings and save authorization to store leads.</span>
+                  <span>Google Sheets опционально. Для бота и сайта достаточно токена Telegram.</span>
                 </div>
               ) : null}
             </div>
@@ -213,9 +290,15 @@ export function App() {
                   <input
                     type="password"
                     value={config.telegramBotToken}
-                    onChange={(event) => setConfig({ ...config, telegramBotToken: event.target.value })}
+                    onChange={(event) => {
+                      setTokenPersisted(false);
+                      setConfig({ ...config, telegramBotToken: event.target.value });
+                    }}
                     placeholder="123456:ABC-DEF..."
                   />
+                  {tokenPersisted && config.telegramBotToken.trim() ? (
+                    <span className="fieldHint">Токен сохранён на этом компьютере.</span>
+                  ) : null}
                 </label>
               </div>
               <button className="primaryButton panelSaveButton" onClick={saveConfig}>
@@ -262,6 +345,16 @@ export function App() {
         )}
       </section>
     </main>
+  );
+}
+
+function configMatches(a: AppConfig, b: AppConfig): boolean {
+  return (
+    a.telegramBotToken === b.telegramBotToken &&
+    a.googleSheetsId === b.googleSheetsId &&
+    a.googleSheetsRange === b.googleSheetsRange &&
+    a.googleServiceAccountJson === b.googleServiceAccountJson &&
+    a.port === b.port
   );
 }
 

@@ -1,6 +1,7 @@
 import express, { type Express } from "express";
 import type { AppConfig } from "../shared/types";
 import type { LeadsService } from "./leadsService";
+import { renderLeadFormPage } from "./webFormPage";
 
 export class WebServerService {
   private app: Express;
@@ -45,38 +46,7 @@ export class WebServerService {
 
   private mountRoutes(): void {
     this.app.get("/", (_req, res) => {
-      res.type("html").send(`<!doctype html>
-<html lang="ru">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>LeadFlow Form</title>
-  </head>
-  <body>
-    <h1>Новая заявка</h1>
-    <form method="post" action="/submit">
-      <label>Имя <input name="name" required /></label><br />
-      <label>Телефон <input name="phone" required /></label><br />
-      <label>Комментарий <textarea name="message"></textarea></label><br />
-      <button type="submit">Отправить</button>
-    </form>
-  </body>
-</html>`);
-    });
-
-    this.app.post("/submit", async (req, res) => {
-      try {
-        await this.leadsService.createLead({
-          source: "website",
-          name: String(req.body.name ?? ""),
-          phone: String(req.body.phone ?? ""),
-          message: String(req.body.message ?? "")
-        });
-        res.redirect("/");
-      } catch (error) {
-        const message = error instanceof Error ? error.message : "Unknown error";
-        res.status(400).send(`Ошибка отправки: ${message}`);
-      }
+      res.type("html").send(renderLeadFormPage());
     });
 
     this.app.post("/api/leads", async (req, res) => {

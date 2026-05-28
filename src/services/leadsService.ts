@@ -6,7 +6,7 @@ import { LocalStore } from "./localStore";
 export class LeadsService {
   constructor(
     private readonly localStore: LocalStore,
-    private readonly sheetsService: GoogleSheetsService
+    private readonly sheetsService: GoogleSheetsService | null
   ) {}
 
   async createLead(input: CreateLeadInput): Promise<Lead> {
@@ -28,7 +28,9 @@ export class LeadsService {
     };
 
     this.localStore.addLead(lead);
-    await this.sheetsService.appendLead(lead);
+    if (this.sheetsService) {
+      await this.sheetsService.appendLead(lead);
+    }
     return lead;
   }
 

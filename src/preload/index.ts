@@ -21,6 +21,11 @@ const api = {
     const handler = (_event: unknown, status: ServiceStatus) => callback(status);
     ipcRenderer.on("status:updated", handler);
     return () => ipcRenderer.off("status:updated", handler);
+  },
+  onBotError: (callback: (message: string) => void): Unsubscribe => {
+    const handler = (_event: unknown, message: string) => callback(message);
+    ipcRenderer.on("bot:error", handler);
+    return () => ipcRenderer.off("bot:error", handler);
   }
 };
 

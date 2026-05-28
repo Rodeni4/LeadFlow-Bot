@@ -2,12 +2,35 @@ import path from "node:path";
 import { app, BrowserWindow, ipcMain } from "electron";
 import dotenv from "dotenv";
 import type { AppConfig } from "../shared/types";
+import { loadPersistedConfig, mergeConfigFromEnv, normalizeConfig, savePersistedConfig } from "./configStore";
 import { AppOrchestrator } from "./orchestrator";
 
 dotenv.config();
 
-const orchestrator = new AppOrchestrator(getInitialConfigFromEnv());
+process.on("unhandledRejection", (reason) => {
+  console.error("[LeadFlow] unhandledRejection:", reason);
+});
+
+let orchestrator: AppOrchestrator | null = null;
 let mainWindow: BrowserWindow | null = null;
+
+function sendToRenderer(channel: string, payload: unknown): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    return;
+  }
+  const contents = mainWindow.webContents;
+  if (contents.isDestroyed()) {
+    return;
+  }
+  contents.send(channel, payload);
+}
+
+function getOrchestrator(): AppOrchestrator {
+  if (!orchestrator) {
+    throw new Error("App is not ready yet.");
+  }
+  return orchestrator;
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -20,6 +43,10 @@ function createWindow(): void {
     }
   });
 
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
+
   if (process.env.NODE_ENV === "development") {
     void mainWindow.loadURL("http://localhost:5173");
   } else {
@@ -28,63 +55,77 @@ function createWindow(): void {
 }
 
 function registerIpc(): void {
-  ipcMain.handle("config:get", () => orchestrator.getConfig());
-  ipcMain.handle("config:set", (_event, config: AppConfig) => {
-    orchestrator.setConfig(config);
-    mainWindow?.webContents.send("status:updated", orchestrator.getStatus());
-    return orchestrator.getConfig();
+  ipcMain.handle("config:get", () => {
+    const disk = loadPersistedConfig();
+    const memory = getOrchestrator().getConfig();
+    if (!disk) {
+      return memory ? normalizeConfig(memory) : null;
+    }
+    if (!memory) {
+      return disk;
+    }
+    return normalizeConfig(mergeConfigFromEnv({ ...disk, ...memory }) ?? disk);
   });
-  ipcMain.handle("services:get-status", () => orchestrator.getStatus());
-  ipcMain.handle("services:start-bot", () => {
-    orchestrator.startBot();
-    mainWindow?.webContents.send("status:updated", orchestrator.getStatus());
-    return orchestrator.getStatus();
+  ipcMain.handle("config:set", (_event, config: AppConfig) => {
+    savePersistedConfig(config);
+    getOrchestrator().syncConfig(config);
+    sendToRenderer("status:updated", getOrchestrator().getStatus());
+    return loadPersistedConfig() ?? getOrchestrator().getConfig();
+  });
+  ipcMain.handle("services:get-status", () => getOrchestrator().getStatus());
+  ipcMain.handle("services:start-bot", async () => {
+    await getOrchestrator().startBot();
+    sendToRenderer("status:updated", getOrchestrator().getStatus());
+    return getOrchestrator().getStatus();
   });
   ipcMain.handle("services:stop-bot", async () => {
-    await orchestrator.stopBot();
-    mainWindow?.webContents.send("status:updated", orchestrator.getStatus());
-    return orchestrator.getStatus();
+    await getOrchestrator().stopBot();
+    sendToRenderer("status:updated", getOrchestrator().getStatus());
+    return getOrchestrator().getStatus();
   });
   ipcMain.handle("services:start-website", async () => {
-    await orchestrator.startWebsite();
-    mainWindow?.webContents.send("status:updated", orchestrator.getStatus());
-    return orchestrator.getStatus();
+    await getOrchestrator().startWebsite();
+    sendToRenderer("status:updated", getOrchestrator().getStatus());
+    return getOrchestrator().getStatus();
   });
   ipcMain.handle("services:stop-website", async () => {
-    await orchestrator.stopWebsite();
-    mainWindow?.webContents.send("status:updated", orchestrator.getStatus());
-    return orchestrator.getStatus();
+    await getOrchestrator().stopWebsite();
+    sendToRenderer("status:updated", getOrchestrator().getStatus());
+    return getOrchestrator().getStatus();
   });
-  ipcMain.handle("leads:get", () => orchestrator.getLeads());
+  ipcMain.handle("leads:get", () => getOrchestrator().getLeads());
 }
 
 app.whenReady().then(() => {
+  const initialConfig = mergeConfigFromEnv(loadPersistedConfig());
+  const leadsFile = path.join(app.getPath("userData"), "leads.json");
+  orchestrator = new AppOrchestrator(initialConfig, leadsFile);
+  if (initialConfig) {
+    console.log("[LeadFlow] config loaded from disk or .env");
+  }
+
   registerIpc();
+  orchestrator.setStatusListener((status, botError) => {
+    sendToRenderer("status:updated", status);
+    if (botError) {
+      sendToRenderer("bot:error", botError);
+    }
+  });
   orchestrator.onLeadAdded(() => {
-    mainWindow?.webContents.send("leads:updated", orchestrator.getLeads());
+    sendToRenderer("leads:updated", getOrchestrator().getLeads());
   });
   createWindow();
 });
 
+app.on("activate", () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
+});
+
 app.on("window-all-closed", async () => {
-  await orchestrator.shutdown();
+  await orchestrator?.shutdown();
   if (process.platform !== "darwin") {
     app.quit();
   }
 });
-
-function getInitialConfigFromEnv(): AppConfig | null {
-  const telegramBotToken = process.env.TELEGRAM_BOT_TOKEN?.trim() ?? "";
-  const googleSheetsId = process.env.GOOGLE_SHEETS_ID?.trim() ?? "";
-  const googleServiceAccountJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() ?? "";
-  if (!telegramBotToken || !googleSheetsId || !googleServiceAccountJson) {
-    return null;
-  }
-  return {
-    telegramBotToken,
-    googleSheetsId,
-    googleSheetsRange: process.env.GOOGLE_SHEETS_RANGE?.trim() || "Leads!A:F",
-    googleServiceAccountJson,
-    port: Number(process.env.PORT ?? 3000)
-  };
-}

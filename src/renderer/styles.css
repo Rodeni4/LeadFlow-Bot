@@ -189,6 +189,11 @@ button.switch.on:hover {
   background: linear-gradient(180deg, #3d89ff 0%, #2a68ef 100%);
 }
 
+button.switch.error {
+  border-color: rgba(237, 76, 103, 0.75);
+  box-shadow: 0 0 0 1px rgba(237, 76, 103, 0.25);
+}
+
 .switchLine {
   display: flex;
   align-items: center;
@@ -207,12 +212,8 @@ button.switch.on:hover {
   height: 20px;
   border-radius: 999px;
   background: #ffffff;
-  transform: translateX(0);
-  transition: transform 0.15s ease;
-}
-
-button.switch.on .switchKnob {
-  transform: translateX(22px);
+  flex-shrink: 0;
+  transition: margin 0.15s ease;
 }
 
 .portInput {
@@ -221,7 +222,6 @@ button.switch.on .switchKnob {
   height: 32px;
   padding: 6px 8px;
 }
-
 
 .gridTwo {
   display: grid;
@@ -342,6 +342,12 @@ label {
   gap: 6px;
   font-size: 13px;
   opacity: 0.9;
+}
+
+.fieldHint {
+  font-size: 12px;
+  opacity: 0.72;
+  color: #86efac;
 }
 
 input,
