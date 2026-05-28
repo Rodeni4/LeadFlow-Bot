@@ -1,0 +1,501 @@
+body {
+  margin: 0;
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+}
+
+.appShell {
+  /* Отступы — менять здесь */
+  --gap-between-containers: 13px;
+  --pad-content-x: 20px;
+  --pad-content-y: 14px;
+  --pad-topbar: 15px;
+  --gap-topbar-inner: 15px;
+  --pad-panel-x: 45px;
+  --pad-panel-top: 40px;
+  --pad-panel-bottom: 22px;
+  --gap-form-fields: 14px;
+  --gap-form-label: 8px;
+  --save-btn-margin-left: 50px;
+  --save-btn-margin-top: 22px;
+
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 190px 1fr;
+}
+
+.appShell.dark {
+  background: #060c1a;
+  color: #e8eeff;
+}
+
+.appShell.light {
+  background: #eef2f8;
+  color: #10203d;
+}
+
+.sidebar {
+  border-right: 1px solid rgba(127, 155, 207, 0.25);
+  padding: 20px 14px;
+}
+
+.appShell.dark .sidebar {
+  background: #081127;
+}
+
+.appShell.light .sidebar {
+  background: #f6f8fd;
+}
+
+.brand {
+  font-size: 28px;
+  font-weight: 800;
+  color: #2b6cff;
+  margin: 4px 10px 20px;
+}
+
+.menu {
+  display: grid;
+  gap: 8px;
+}
+
+.menuSectionTitle {
+  font-size: 12px;
+  opacity: 0.72;
+  padding: 8px 12px 2px;
+}
+
+.menuItem {
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.menuItem.active {
+  background: rgba(43, 108, 255, 0.16);
+  color: #2b6cff;
+}
+
+.content {
+  padding: var(--pad-content-y) var(--pad-content-x);
+  display: grid;
+  align-content: start;
+  gap: var(--gap-between-containers);
+  max-width: 980px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.card {
+  border: 1px solid rgba(127, 155, 207, 0.25);
+  border-radius: 14px;
+  padding: 14px 20px;
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+  box-sizing: border-box;
+}
+
+.appShell.dark .card {
+  background: #09162f;
+}
+
+.appShell.light .card {
+  background: #f9fbff;
+}
+
+.topbar.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-topbar-inner);
+  padding: var(--pad-topbar);
+  overflow: hidden;
+  align-self: start;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.topbarRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  min-height: 0;
+  flex-shrink: 0;
+}
+
+.topbar .noticeInline {
+  display: contents;
+}
+
+.topbar .noticeBox {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+}
+
+.topbar .noticeBox + .noticeBox {
+  margin-top: 0;
+}
+
+.servicesInline {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+
+.controlGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  height: 32px;
+}
+
+.controlGroup a {
+  font-size: 13px;
+  line-height: 32px;
+}
+
+button.switch {
+  width: 48px;
+  height: 26px;
+  min-width: 48px;
+  border-radius: 999px;
+  padding: 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  border: 1px solid rgba(116, 147, 207, 0.45);
+  background: rgba(116, 147, 207, 0.2);
+  flex-shrink: 0;
+}
+
+button.switch:hover {
+  background: rgba(116, 147, 207, 0.3);
+}
+
+button.switch.on {
+  background: linear-gradient(180deg, #2d7dff 0%, #235de4 100%);
+  border-color: #2d7dff;
+  justify-content: flex-end;
+}
+
+button.switch.on:hover {
+  background: linear-gradient(180deg, #3d89ff 0%, #2a68ef 100%);
+}
+
+.switchLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.switchName {
+  font-size: 13px;
+  line-height: 32px;
+  white-space: nowrap;
+  opacity: 0.92;
+}
+
+.switchKnob {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: #ffffff;
+  transform: translateX(0);
+  transition: transform 0.15s ease;
+}
+
+button.switch.on .switchKnob {
+  transform: translateX(22px);
+}
+
+.portInput {
+  width: 72px;
+  max-width: 72px;
+  height: 32px;
+  padding: 6px 8px;
+}
+
+
+.gridTwo {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.panelCard {
+  width: 100%;
+  max-width: 100%;
+  margin: 0;
+  align-self: start;
+  padding: var(--pad-panel-top) var(--pad-panel-x) var(--pad-panel-bottom);
+}
+
+.panelCard h2 {
+  margin: 0 0 var(--gap-form-fields);
+  font-size: 22px;
+}
+
+.panelFormRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.panelFormRow .fields {
+  flex: 1;
+  max-width: 520px;
+  margin: 0;
+  gap: var(--gap-form-fields);
+}
+
+.panelCard label {
+  gap: var(--gap-form-label);
+}
+
+.panelSaveButton {
+  flex-shrink: 0;
+  white-space: nowrap;
+  margin-left: var(--save-btn-margin-left);
+  margin-top: var(--save-btn-margin-top);
+  align-self: flex-start;
+}
+
+.panelCard table {
+  width: 100%;
+}
+
+.noticeBox {
+  border-radius: 12px;
+  padding: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  border: 1px solid;
+}
+
+.noticeBox.muted {
+  opacity: 0.92;
+}
+
+.noticeIcon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+.appShell.light .noticeBox.info {
+  color: #0d6e4a;
+  background: #e3f6ec;
+  border-color: #b8e6cc;
+}
+
+.appShell.light .noticeBox.error {
+  color: #9b1c31;
+  background: #fde8ec;
+  border-color: #f5c2cc;
+}
+
+.appShell.dark .noticeBox.info {
+  color: #9ae6c3;
+  background: rgba(65, 184, 131, 0.14);
+  border-color: rgba(65, 184, 131, 0.35);
+}
+
+.appShell.dark .noticeBox.error {
+  color: #ffb3c0;
+  background: rgba(237, 76, 103, 0.14);
+  border-color: rgba(237, 76, 103, 0.35);
+}
+
+.fields {
+  display: grid;
+  gap: var(--gap-form-fields);
+  margin: 0;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+input,
+textarea {
+  border: 1px solid rgba(116, 147, 207, 0.45);
+  background: transparent;
+  color: inherit;
+  border-radius: 9px;
+  padding: 8px 10px;
+  font: inherit;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.panelCard textarea {
+  min-height: 140px;
+  resize: vertical;
+}
+
+input:focus,
+textarea:focus {
+  border-color: #2b6cff;
+  outline: 2px solid rgba(43, 108, 255, 0.2);
+  outline-offset: 0;
+}
+
+button {
+  border: 1px solid rgba(116, 147, 207, 0.45);
+  background: rgba(25, 47, 92, 0.22);
+  color: inherit;
+  padding: 8px 12px;
+  border-radius: 9px;
+  cursor: pointer;
+  font: inherit;
+}
+
+button:hover {
+  background: rgba(40, 70, 133, 0.35);
+}
+
+button.toggleTheme {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  margin-left: auto;
+  flex-shrink: 0;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  color: #1e293b;
+}
+
+.appShell.dark button.toggleTheme {
+  background: #0f172a;
+  border-color: rgba(127, 155, 207, 0.35);
+  color: #f8fafc;
+}
+
+button.toggleTheme:hover {
+  border-color: #2b6cff;
+  background: #ffffff;
+}
+
+.appShell.dark button.toggleTheme:hover {
+  background: #131f38;
+}
+
+button.toggleTheme .themeIcon {
+  color: #2b6cff;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.primaryButton {
+  background: linear-gradient(180deg, #2d7dff 0%, #235de4 100%);
+  border-color: #2d7dff;
+  color: #ffffff;
+}
+
+a {
+  color: #80aaff;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.statusRow {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.badge {
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  border: 1px solid rgba(116, 147, 207, 0.45);
+  background: rgba(116, 147, 207, 0.14);
+}
+
+.badge.running {
+  background: rgba(65, 184, 131, 0.2);
+  border-color: #41b883;
+  color: #68e3af;
+}
+
+.badge.stopped {
+  color: #b4c4e8;
+}
+
+.badge.error {
+  background: rgba(237, 76, 103, 0.2);
+  border-color: #ed4c67;
+  color: #ff9ead;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border-bottom: 1px solid rgba(127, 155, 207, 0.24);
+  text-align: left;
+  padding: 8px;
+  font-size: 13px;
+}
+
+th {
+  font-weight: 600;
+}
+
+.appShell.light .primaryButton {
+  color: #fff;
+}
+
+.appShell.light .badge.running {
+  color: #216946;
+}
+
+.appShell.light .badge.error {
+  color: #9f1f35;
+}
+
+@media (max-width: 1200px) {
+  .appShell {
+    grid-template-columns: 180px 1fr;
+  }
+}
